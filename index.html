@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Interview AI</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 30px;
+    }
+    h2 {
+      margin-bottom: 10px;
+    }
+    #question {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    #answer {
+      background: #ffffff;
+      padding: 15px;
+      border-radius: 6px;
+      margin-top: 10px;
+      min-height: 60px;
+      white-space: pre-wrap;
+    }
+    .hint {
+      margin-top: 20px;
+      color: #666;
+      font-style: italic;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>🎤 Ask interview questions</h2>
+
+<p><b>Question:</b></p>
+<p id="question">—</p>
+
+<p><b>Answer:</b></p>
+<pre id="answer">Click once and ask a question</pre>
+
+<p class="hint">Tap once to allow microphone</p>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  // 🔴 CHANGE THIS TO YOUR RENDER BACKEND URL
+  const BACKEND_URL = "https://voice-interview-ai.onrender.com/ask";
+
+  let busy = false;
+
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    document.getElementById("answer").innerText =
+      "❌ Speech recognition not supported. Use Chrome.";
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = "en-US";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  function isQuestion(text) {
+    const t = text.toLowerCase().trim();
+    return (
+      t.includes("?") ||
+      t.startsWith("what") ||
+      t.startsWith("how") ||
+      t.startsWith("why") ||
+      t.startsWith("explain") ||
+      t.startsWith("define") ||
+      t.startsWith("can you") ||
+      t.startsWith("could you") ||
+      t.startsWith("tell me") ||
+      t.startsWith("give me")
+    );
+  }
+
+  recognition.onresult = async (event) => {
+    if (busy) return;
+
+    const text = event.results[0][0].transcript.trim();
+    document.getElementById("question").innerText = text;
+
+    if (!isQuestion(text)) {
+      document.getElementById("answer").innerText =
+        "Heard, but not a question. Ask again 🙂";
+      recognition.start();
+      return;
+    }
+
+    busy = true;
+    document.getElementById("answer").innerText = "⏳ Thinking...";
+
+    try {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 20000);
+
+      const res = await fetch(BACKEND_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: text }),
