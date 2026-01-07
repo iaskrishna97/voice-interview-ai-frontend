@@ -25,10 +25,11 @@
       min-height: 60px;
       white-space: pre-wrap;
     }
-    .hint {
+    button {
+      padding: 12px 16px;
+      font-size: 16px;
+      cursor: pointer;
       margin-top: 20px;
-      color: #666;
-      font-style: italic;
     }
   </style>
 </head>
@@ -37,73 +38,91 @@
 
 <h2>🎤 Ask interview questions</h2>
 
+<button id="startBtn">🎤 Click to start microphone</button>
+
 <p><b>Question:</b></p>
 <p id="question">—</p>
 
 <p><b>Answer:</b></p>
-<pre id="answer">Click once and ask a question</pre>
-
-<p class="hint">Tap once to allow microphone</p>
+<pre id="answer">Waiting…</pre>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+const BACKEND_URL = "https://voice-interview-ai-backend.onrender.com/ask";
 
-  // 🔴 CHANGE THIS TO YOUR RENDER BACKEND URL
-  const BACKEND_URL = "https://voice-interview-ai-backend.onrender.com/ask";
+let busy = false;
 
-  let busy = false;
+const SpeechRecognition =
+  window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  const SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SpeechRecognition) {
+  document.getElementById("answer").innerText =
+    "❌ Speech recognition not supported. Use Chrome.";
+}
 
-  if (!SpeechRecognition) {
+const recognition = new SpeechRecognition();
+recognition.lang = "en-US";
+recognition.continuous = false;
+recognition.interimResults = false;
+
+function isQuestion(text) {
+  const t = text.toLowerCase().trim();
+  return (
+    t.includes("?") ||
+    t.startsWith("what") ||
+    t.startsWith("how") ||
+    t.startsWith("why") ||
+    t.startsWith("explain") ||
+    t.startsWith("define") ||
+    t.startsWith("can you") ||
+    t.startsWith("could you") ||
+    t.startsWith("tell me") ||
+    t.startsWith("give me")
+  );
+}
+
+// 🔴 EXPLICIT USER ACTION (REQUIRED)
+document.getElementById("startBtn").onclick = () => {
+  document.getElementById("answer").innerText = "🎤 Listening...";
+  recognition.start();
+};
+
+recognition.onresult = async (event) => {
+  if (busy) return;
+
+  const text = event.results[0][0].transcript.trim();
+  document.getElementById("question").innerText = text;
+
+  if (!isQuestion(text)) {
     document.getElementById("answer").innerText =
-      "❌ Speech recognition not supported. Use Chrome.";
+      "Heard, but not a question. Ask again 🙂";
     return;
   }
 
-  const recognition = new SpeechRecognition();
-  recognition.lang = "en-US";
-  recognition.continuous = false;
-  recognition.interimResults = false;
+  busy = true;
+  document.getElementById("answer").innerText = "⏳ Thinking...";
 
-  function isQuestion(text) {
-    const t = text.toLowerCase().trim();
-    return (
-      t.includes("?") ||
-      t.startsWith("what") ||
-      t.startsWith("how") ||
-      t.startsWith("why") ||
-      t.startsWith("explain") ||
-      t.startsWith("define") ||
-      t.startsWith("can you") ||
-      t.startsWith("could you") ||
-      t.startsWith("tell me") ||
-      t.startsWith("give me")
-    );
+  try {
+    const res = await fetch(BACKEND_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: text })
+    });
+
+    const data = await res.json();
+    document.getElementById("answer").innerText = data.answer;
+  } catch (e) {
+    document.getElementById("answer").innerText =
+      "❌ Backend error. Try again.";
   }
 
-  recognition.onresult = async (event) => {
-    if (busy) return;
+  busy = false;
+};
 
-    const text = event.results[0][0].transcript.trim();
-    document.getElementById("question").innerText = text;
+recognition.onerror = (event) => {
+  document.getElementById("answer").innerText =
+    "Mic error: " + event.error;
+};
+</script>
 
-    if (!isQuestion(text)) {
-      document.getElementById("answer").innerText =
-        "Heard, but not a question. Ask again 🙂";
-      recognition.start();
-      return;
-    }
-
-    busy = true;
-    document.getElementById("answer").innerText = "⏳ Thinking...";
-
-    try {
-      const controller = new AbortController();
-      setTimeout(() => controller.abort(), 20000);
-
-      const res = await fetch(BACKEND_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: text }),
+</body>
+</html>
